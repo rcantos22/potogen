@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!//usr/bin/python
 # -*- coding: utf-8 -*-
 from flask import Flask, request, abort, render_template, session, \
     redirect, url_for, jsonify
